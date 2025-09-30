@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-09-30T06:11:32.520Z",
+  "tools": {
+    "revit": [
+      {
+        "name": "Align Elements",
+        "description": "Aligns selected Revit elements left, right, top, bottom, or distributes them evenly",
+        "folder": "align-elements",
+        "updated_at": "2025-09-29T23:11:17-07:00"
+      }
+    ]
+  }
+}
