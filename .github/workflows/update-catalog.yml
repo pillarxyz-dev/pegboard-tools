@@ -1,0 +1,78 @@
+name: Update Tool Catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-catalog:
+    name: Generate and update catalog.json
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure Git
+        run: |
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Generate catalog
+        run: node scripts/generate-catalog.js
+
+      - name: Add catalog to staging
+        run: git add catalog.json
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit catalog updates
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git commit -m "chore: auto-update catalog.json"
+          git push
+
+      - name: Generate CDN purge URLs
+        if: steps.changes.outputs.changed == 'true'
+        id: cdn_urls
+        run: |
+          # Core catalog URLs
+          urls="https://cdn.jsdelivr.net/gh/${{ github.repository }}@latest/catalog.json"
+          urls+=",https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/catalog.json"
+
+          # Modified tool files from triggering commit
+          for file in $(git diff-tree --no-commit-id --name-only -r HEAD~1 HEAD); do
+            if [[ $file == tools/* ]]; then
+              urls+=",https://cdn.jsdelivr.net/gh/${{ github.repository }}@latest/${file}"
+              urls+=",https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/${file}"
+            fi
+          done
+
+          echo "urls=$urls" >> $GITHUB_OUTPUT
+
+      - name: Purge CDN cache
+        if: steps.changes.outputs.changed == 'true'
+        uses: egad13/purge-jsdelivr-cache@v1
+        with:
+          url: ${{ steps.cdn_urls.outputs.urls }}
