@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated_at": "2025-09-30T06:11:32.520Z",
+  "generated_at": "2025-10-02T06:32:44.851Z",
   "tools": {
     "revit": [
       {
@@ -8,6 +8,20 @@
         "description": "Aligns selected Revit elements left, right, top, bottom, or distributes them evenly",
         "folder": "align-elements",
         "updated_at": "2025-09-29T23:11:17-07:00"
+      },
+      {
+        "name": "Nano Banana Renderer",
+        "description": "Captures 3D view and sends to Nano Banana for architectural rendering",
+        "folder": "nano-banana-renderer",
+        "updated_at": "2025-10-01T23:32:27-07:00"
+      }
+    ],
+    "rhino": [
+      {
+        "name": "Nano Banana Renderer",
+        "description": "Capture viewport and create AI-enhanced photorealistic renderings",
+        "folder": "nano-banana-renderer",
+        "updated_at": "2025-10-01T23:32:27-07:00"
       }
     ]
   }
