@@ -19,24 +19,19 @@ clr.AddReference('Newtonsoft.Json')
 
 import Rhino
 import scriptcontext as sc
-import subprocess
 import os
 import time
 
 from System.Windows.Forms import (
     MessageBox, MessageBoxButtons, MessageBoxIcon, Form, PictureBox, Button,
-    DockStyle, FormStartPosition, DialogResult, RadioButton, TextBox, Label,
-    Panel, SaveFileDialog, FlowLayoutPanel, Application
+    DockStyle, FormStartPosition, DialogResult, TextBox, Label,
+    Panel, SaveFileDialog, FlowLayoutPanel, Application, CheckBox
 )
 from System.Drawing import Image, Size
 from System.IO import Path, MemoryStream
 import System
 from Newtonsoft.Json.Linq import JObject
-
-# Subprocess window hiding constants
-STARTF_USESHOWWINDOW = 0x00000001
-SW_HIDE = 0
-CREATE_NO_WINDOW = 0x08000000
+from System.Diagnostics import Process, ProcessStartInfo
 
 # Default rendering prompts (title, description)
 DEFAULT_PROMPTS = [
@@ -69,114 +64,156 @@ def get_render_prompt():
     """
     form = Form()
     form.Text = "AI Rendering - Choose Style"
-    form.Size = Size(650, 520)
+    form.ClientSize = Size(700, 465)
     form.StartPosition = FormStartPosition.CenterScreen
     form.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog
     form.MaximizeBox = False
     form.MinimizeBox = False
+    form.BackColor = System.Drawing.Color.FromArgb(250, 250, 250)
 
     # Header
     header = Label()
     header.Text = "Select a rendering style:"
-    header.Font = System.Drawing.Font("Segoe UI", 10, System.Drawing.FontStyle.Bold)
-    header.Location = System.Drawing.Point(15, 15)
-    header.Size = Size(620, 25)
+    header.Font = System.Drawing.Font("Segoe UI", 11, System.Drawing.FontStyle.Bold)
+    header.Location = System.Drawing.Point(20, 20)
+    header.Size = Size(660, 30)
     form.Controls.Add(header)
 
     # Left panel for options
     left_panel = Panel()
-    left_panel.Location = System.Drawing.Point(15, 45)
-    left_panel.Size = Size(200, 330)
+    left_panel.Location = System.Drawing.Point(20, 55)
+    left_panel.Size = Size(220, 330)
     left_panel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-    left_panel.BackColor = System.Drawing.Color.FromArgb(250, 250, 250)
+    left_panel.BackColor = System.Drawing.Color.White
     form.Controls.Add(left_panel)
 
     # Prompt text area
     prompt_label = Label()
-    prompt_label.Text = "Prompt:"
-    prompt_label.Font = System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold)
-    prompt_label.Location = System.Drawing.Point(225, 45)
-    prompt_label.Size = Size(410, 20)
+    prompt_label.Text = "Prompt Preview:"
+    prompt_label.Font = System.Drawing.Font("Segoe UI", 10, System.Drawing.FontStyle.Bold)
+    prompt_label.Location = System.Drawing.Point(255, 55)
+    prompt_label.Size = Size(425, 25)
     form.Controls.Add(prompt_label)
 
     prompt_text = TextBox()
-    prompt_text.Location = System.Drawing.Point(225, 70)
-    prompt_text.Size = Size(410, 305)
+    prompt_text.Location = System.Drawing.Point(255, 85)
+    prompt_text.Size = Size(425, 300)
     prompt_text.Multiline = True
-    prompt_text.Font = System.Drawing.Font("Segoe UI", 9)
+    prompt_text.Font = System.Drawing.Font("Segoe UI", 17)
     prompt_text.Text = DEFAULT_PROMPTS[0][1]
     prompt_text.ReadOnly = True
     prompt_text.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-    prompt_text.BackColor = System.Drawing.Color.FromArgb(245, 245, 245)
+    prompt_text.BackColor = System.Drawing.Color.FromArgb(248, 248, 248)
     form.Controls.Add(prompt_text)
 
-    # Create radio buttons for default prompts
+    # Create buttons for default prompts
     y_pos = 10
-    for i, (title, description) in enumerate(DEFAULT_PROMPTS):
-        rb = RadioButton()
-        rb.Text = title
-        rb.Location = System.Drawing.Point(10, y_pos)
-        rb.Size = Size(180, 25)
-        rb.Font = System.Drawing.Font("Segoe UI", 9)
-        rb.Checked = (i == 0)
+    selected_prompt = [DEFAULT_PROMPTS[0][1]]  # Use list for mutable reference
 
-        def make_handler(desc):
+    for i, (title, description) in enumerate(DEFAULT_PROMPTS):
+        btn = Button()
+        btn.Text = title
+        btn.Location = System.Drawing.Point(10, y_pos)
+        btn.Size = Size(200, 35)
+        btn.Font = System.Drawing.Font("Segoe UI", 9)
+        btn.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        btn.BackColor = System.Drawing.Color.FromArgb(240, 240, 240) if i != 0 else System.Drawing.Color.FromArgb(0, 122, 255)
+        btn.ForeColor = System.Drawing.Color.Black if i != 0 else System.Drawing.Color.White
+        btn.FlatAppearance.BorderSize = 0
+
+        def make_handler(desc, button):
             def handler(sender, e):
-                if sender.Checked:
-                    prompt_text.Text = desc
-                    prompt_text.ReadOnly = True
-                    prompt_text.BackColor = System.Drawing.Color.FromArgb(245, 245, 245)
+                # Reset all buttons
+                for ctrl in left_panel.Controls:
+                    if isinstance(ctrl, Button):
+                        ctrl.BackColor = System.Drawing.Color.FromArgb(240, 240, 240)
+                        ctrl.ForeColor = System.Drawing.Color.Black
+                # Highlight selected
+                button.BackColor = System.Drawing.Color.FromArgb(0, 122, 255)
+                button.ForeColor = System.Drawing.Color.White
+                prompt_text.Text = desc
+                prompt_text.ReadOnly = True
+                prompt_text.BackColor = System.Drawing.Color.FromArgb(248, 248, 248)
+                selected_prompt[0] = desc
             return handler
 
-        rb.CheckedChanged += make_handler(description)
-        left_panel.Controls.Add(rb)
-        y_pos += 35
+        btn.Click += make_handler(description, btn)
+        left_panel.Controls.Add(btn)
+        y_pos += 40
 
     # Separator
     separator = Label()
     separator.Location = System.Drawing.Point(10, y_pos)
-    separator.Size = Size(180, 1)
+    separator.Size = Size(200, 2)
     separator.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D
     left_panel.Controls.Add(separator)
-    y_pos += 10
+    y_pos += 12
 
     # Custom prompt option
-    rb_custom = RadioButton()
-    rb_custom.Text = "Custom Prompt"
-    rb_custom.Location = System.Drawing.Point(10, y_pos)
-    rb_custom.Size = Size(180, 25)
-    rb_custom.Font = System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Italic)
+    btn_custom = Button()
+    btn_custom.Text = "✏️  Custom Prompt"
+    btn_custom.Location = System.Drawing.Point(10, y_pos)
+    btn_custom.Size = Size(200, 35)
+    btn_custom.Font = System.Drawing.Font("Segoe UI", 9)
+    btn_custom.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+    btn_custom.BackColor = System.Drawing.Color.FromArgb(240, 240, 240)
+    btn_custom.ForeColor = System.Drawing.Color.Black
+    btn_custom.FlatAppearance.BorderSize = 0
 
     def custom_handler(sender, e):
-        if sender.Checked:
-            prompt_text.Text = ""
-            prompt_text.ReadOnly = False
-            prompt_text.BackColor = System.Drawing.Color.White
-            prompt_text.Focus()
+        # Reset all buttons
+        for ctrl in left_panel.Controls:
+            if isinstance(ctrl, Button):
+                ctrl.BackColor = System.Drawing.Color.FromArgb(240, 240, 240)
+                ctrl.ForeColor = System.Drawing.Color.Black
+        # Highlight custom button
+        btn_custom.BackColor = System.Drawing.Color.FromArgb(0, 122, 255)
+        btn_custom.ForeColor = System.Drawing.Color.White
+        prompt_text.Text = ""
+        prompt_text.ReadOnly = False
+        prompt_text.BackColor = System.Drawing.Color.White
+        prompt_text.Focus()
 
-    rb_custom.CheckedChanged += custom_handler
-    left_panel.Controls.Add(rb_custom)
+    btn_custom.Click += custom_handler
+    left_panel.Controls.Add(btn_custom)
 
-    # Buttons
-    button_panel = FlowLayoutPanel()
-    button_panel.Location = System.Drawing.Point(0, 430)
-    button_panel.Size = Size(650, 60)
-    button_panel.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft
-    button_panel.Padding = System.Windows.Forms.Padding(15)
-    form.Controls.Add(button_panel)
+    # Bottom button bar
+    button_bar = Panel()
+    button_bar.Location = System.Drawing.Point(0, 400)
+    button_bar.Size = Size(700, 65)
+    button_bar.BackColor = System.Drawing.Color.FromArgb(245, 245, 245)
+    button_bar.Cursor = System.Windows.Forms.Cursors.Default
+    form.Controls.Add(button_bar)
 
+    # Generate button
     ok_button = Button()
     ok_button.Text = "Generate Rendering"
-    ok_button.Size = Size(140, 32)
-    ok_button.Font = System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold)
+    ok_button.Location = System.Drawing.Point(490, 15)
+    ok_button.Size = Size(180, 36)
+    ok_button.Font = System.Drawing.Font("Segoe UI", 10, System.Drawing.FontStyle.Bold)
     ok_button.DialogResult = DialogResult.OK
-    button_panel.Controls.Add(ok_button)
+    ok_button.BackColor = System.Drawing.Color.Transparent
+    ok_button.ForeColor = System.Drawing.Color.FromArgb(80, 80, 80)
+    ok_button.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+    ok_button.FlatAppearance.BorderSize = 0
+    ok_button.FlatAppearance.MouseOverBackColor = System.Drawing.Color.FromArgb(230, 230, 230)
+    ok_button.Cursor = System.Windows.Forms.Cursors.Hand
+    button_bar.Controls.Add(ok_button)
 
+    # Cancel button
     cancel_button = Button()
     cancel_button.Text = "Cancel"
-    cancel_button.Size = Size(80, 32)
+    cancel_button.Location = System.Drawing.Point(380, 15)
+    cancel_button.Size = Size(100, 36)
+    cancel_button.Font = System.Drawing.Font("Segoe UI", 10)
     cancel_button.DialogResult = DialogResult.Cancel
-    button_panel.Controls.Add(cancel_button)
+    cancel_button.BackColor = System.Drawing.Color.Transparent
+    cancel_button.ForeColor = System.Drawing.Color.FromArgb(80, 80, 80)
+    cancel_button.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+    cancel_button.FlatAppearance.BorderSize = 0
+    cancel_button.FlatAppearance.MouseOverBackColor = System.Drawing.Color.FromArgb(230, 230, 230)
+    cancel_button.Cursor = System.Windows.Forms.Cursors.Hand
+    button_bar.Controls.Add(cancel_button)
 
     form.AcceptButton = ok_button
     form.CancelButton = cancel_button
@@ -329,43 +366,31 @@ def send_to_gemini(image_file, prompt, api_key):
         # Build curl command
         api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=" + api_key
 
-        curl_command = [
-            "curl",
-            "-X", "POST",
-            "-H", "Content-Type: application/json",
-            "-d", "@" + request_file,
-            "-o", response_file,
-            "--silent",
-            "--show-error",
-            "--max-time", "120",
-            api_url
-        ]
+        # Execute curl with hidden window using .NET Process
+        psi = ProcessStartInfo()
+        psi.FileName = "curl"
+        psi.Arguments = '-X POST -H "Content-Type: application/json" -d "@' + request_file + '" -o "' + response_file + '" --silent --show-error --max-time 120 "' + api_url + '"'
+        psi.UseShellExecute = False
+        psi.CreateNoWindow = True
+        psi.RedirectStandardOutput = True
+        psi.RedirectStandardError = True
 
-        # Execute curl with hidden window
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags = STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = SW_HIDE
-
-        process = subprocess.Popen(
-            curl_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=True,
-            startupinfo=startupinfo,
-            creationflags=CREATE_NO_WINDOW
-        )
+        process = Process()
+        process.StartInfo = psi
+        process.Start()
 
         # Keep UI responsive while waiting
-        while process.poll() is None:
+        while not process.HasExited:
             Application.DoEvents()
             time.sleep(0.1)
 
-        stdout, stderr = process.communicate()
+        process.WaitForExit()
 
-        if process.returncode != 0:
-            error_msg = "curl failed with code " + str(process.returncode)
+        if process.ExitCode != 0:
+            stderr = process.StandardError.ReadToEnd()
+            error_msg = "curl failed with code " + str(process.ExitCode)
             if stderr:
-                error_msg += ": " + stderr.decode('utf-8', errors='ignore')
+                error_msg += ": " + stderr
             raise Exception(error_msg)
 
         # Read and parse response
