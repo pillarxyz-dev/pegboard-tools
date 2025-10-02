@@ -1,0 +1,4 @@
+{
+  "name": "Nano Banana Renderer",
+  "description": "Captures 3D view and sends to Nano Banana for architectural rendering"
+}
