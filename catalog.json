@@ -1,7 +1,15 @@
 {
   "version": "1.0.0",
-  "generated_at": "2025-10-02T20:17:52.031Z",
+  "generated_at": "2025-10-07T07:11:35.153Z",
   "tools": {
+    "blender": [
+      {
+        "name": "Objects Explosion",
+        "description": "Shatters selected objects into fragments with dramatic explosion animation",
+        "folder": "objects-explosion",
+        "updated_at": "2025-10-07T00:10:39-07:00"
+      }
+    ],
     "revit": [
       {
         "name": "Align Elements",
